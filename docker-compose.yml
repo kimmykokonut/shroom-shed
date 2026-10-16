@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    platform: linux/amd64
+    container_name: shroom_postgis
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: shroom
+      POSTGRES_PASSWORD: shroom_password
+      POSTGRES_DB: shroom_shed
+    ports:
+      - "5432:5432"
+    volumes:
+      # Persist database data across container restarts
+      - pgdata:/var/lib/postgresql/data
+      # Scripts in /docker-entrypoint-initdb.d run automatically on first DB creation
+      - ./sql/init:/docker-entrypoint-initdb.d:ro
+      # Mount our working SQL queries and raw spatial data into the container
+      # so tools like psql and raster2pgsql can access them directly
+      - ./sql:/sql
+      - ./data:/data
+
+  # Containerized GDAL CLI (ogr2ogr, gdalwarp, gdalinfo)
+  # Uses a profile so `docker compose up -d` only runs the database,
+  # while `docker compose run --rm gdal <cmd>` runs GDAL on demand.
+  gdal:
+    image: ghcr.io/osgeo/gdal:alpine-small-latest
+    profiles: ["tools"]
+    working_dir: /data
+    volumes:
+      - ./data:/data
+    network_mode: "service:db"
+
+volumes:
+  pgdata:

@@ -40,10 +40,16 @@ Stretch: NOAA GHCN-Daily precipitation data from nearest weather station, joined
 docker compose up -d
 ```
 
-3. connect to container's interactive shell
+3. connect to container's interactive shell `psql`
 
 ```bash
 docker compose exec db psql -U shroom -d shroom_shed
+```
+
+4. once inside psql, inspect database if desired
+
+```bash
+\d observations
 ```
 
 ### Proposed Chunk-by-Chunk Roadmap (One Commit per Chunk)

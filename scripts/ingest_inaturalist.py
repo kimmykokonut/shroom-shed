@@ -29,9 +29,10 @@ MAX_PAGES = 10
 PER_PAGE = 200
 
 # Raw SQL statement:
-# Notice how the 8th value uses PostGIS functions right inside the INSERT:
+# Notice how the last value uses PostGIS functions right inside the INSERT:
 # ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)
-# And ON CONFLICT (inaturalist_id) DO NOTHING safely skips duplicates if re-run!
+# And ON CONFLICT ... DO UPDATE (an "UPSERT") updates `obscured` and `inaturalist_url`
+# if the row already exists!
 INSERT_SQL = """
 INSERT INTO observations (
     inaturalist_id,
@@ -41,13 +42,17 @@ INSERT INTO observations (
     observed_date,
     quality_grade,
     positional_accuracy_m,
+    obscured,
+    inaturalist_url,
     geom
 )
 VALUES (
-    %s, %s, %s, %s, %s, %s, %s,
+    %s, %s, %s, %s, %s, %s, %s, %s, %s,
     ST_SetSRID(ST_MakePoint(%s, %s), 4326)
 )
-ON CONFLICT (inaturalist_id) DO NOTHING;
+ON CONFLICT (inaturalist_id) DO UPDATE SET
+    obscured = EXCLUDED.obscured,
+    inaturalist_url = EXCLUDED.inaturalist_url;
 """
 
 
@@ -103,15 +108,24 @@ def parse_observation(item: dict):
 
     # GeoJSON coordinates are ALWAYS [longitude, latitude] -> [X, Y]
     lon, lat = float(coords[0]), float(coords[1])
+    obs_id = int(item["id"])
+    is_obscured = bool(
+        item.get("obscured")
+        or item.get("geoprivacy") == "obscured"
+        or item.get("taxon_geoprivacy") == "obscured"
+    )
+    url = item.get("uri") or f"https://www.inaturalist.org/observations/{obs_id}"
 
     return (
-        int(item["id"]),
+        obs_id,
         int(taxon["id"]),
         taxon.get("name", "Unknown Fungi"),
         taxon.get("preferred_common_name"),
         observed_date,
         item.get("quality_grade"),
         item.get("positional_accuracy"),
+        is_obscured,
+        url,
         lon,
         lat,
     )

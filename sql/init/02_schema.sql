@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS observations (
     observed_date DATE,
     quality_grade TEXT,
     positional_accuracy_m INTEGER,
+    obscured BOOLEAN NOT NULL DEFAULT false,
+    inaturalist_url TEXT,
     geom GEOMETRY(Point, 4326) NOT NULL
 );
 

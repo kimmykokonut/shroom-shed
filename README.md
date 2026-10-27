@@ -14,6 +14,7 @@ _by [Kim Robinson](https://github.com/kimmykokonut)_
 
 ## Jump around
 
+- [PostGIS & SQL Glossary](/POSTGIS_CHEATSHEET.md)
 - [Introduction](#introduction)
 - [Features](#features)
 - [Toolbelt](#toolbelt)

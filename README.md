@@ -26,6 +26,7 @@ _by [Kim Robinson](https://github.com/kimmykokonut)_
   - [Spatial Reference Systems & Distance Basics](#1-spatial-reference-systems--distance-basics)
   - [Exploring Mushroom Observations](#2-exploring-mushroom-observations)
   - [Land Ownership Spatial Joins (PAD-US)](#3-land-ownership-spatial-joins-pad-us)
+  - [Terrain Rasters: Elevation, Slope & Aspect (USGS 3DEP)](#4-terrain-rasters-elevation-slope--aspect-usgs-3dep)
 - [Phases & Stretch Goals](#phases--stretch-goals)
 - [Contact and Support](#contact-and-support)
 - [License](#license)
@@ -164,6 +165,13 @@ None at this time.
     ./scripts/load_padus.sh
     ```
 
+13. Download and load the USGS 3DEP Digital Elevation Model (DEM) raster (`EPSG:32610`), then derive slope and aspect raster tables:
+    ```bash
+    ./scripts/download_dem.sh
+    ./scripts/load_dem.sh
+    docker compose exec -T db psql -U shroom -d shroom_shed -f /sql/05_terrain_rasters.sql
+    ```
+
 ---
 
 ### Connecting to the Database
@@ -298,6 +306,22 @@ SELECT o.species_name, o.common_name, COUNT(DISTINCT o.inaturalist_id) AS sighti
 
 ---
 
+### 4. Terrain Rasters: Elevation, Slope & Aspect (USGS 3DEP)
+
+The USGS 3DEP Digital Elevation Model (`elevation_raster`) is stored in **`EPSG:32610`** (UTM Zone 10N, meters) as 560 indexed `100×100` pixel tiles (~30m resolution), alongside derived **`slope_raster`** (`0°–90°` steepness via `ST_Slope`) and **`aspect_raster`** (`0°–360°` compass direction via `ST_Aspect`).
+
+**Inspect tile count, pixel dimensions, and meter resolution of `elevation_raster`:**
+```sql
+SELECT COUNT(*) AS total_tiles, ST_Width(rast) AS tile_width_px, ST_Height(rast) AS tile_height_px, ST_SRID(rast) AS srid, ROUND(ST_ScaleX(rast)::numeric, 2) AS pixel_width_meters, ROUND(ST_ScaleY(rast)::numeric, 2) AS pixel_height_meters FROM elevation_raster GROUP BY tile_width_px, tile_height_px, srid, pixel_width_meters, pixel_height_meters;
+```
+
+**Sample elevation (meters), slope (degrees), and aspect (compass degrees) at a GPS coordinate (`ST_Value`):**
+```sql
+SELECT e.rid AS tile_number, ROUND(ST_Value(e.rast, ST_Transform(ST_SetSRID(ST_MakePoint(-123.5736, 45.5898), 4326), 32610))::numeric, 1) AS elevation_meters, ROUND(ST_Value(s.rast, ST_Transform(ST_SetSRID(ST_MakePoint(-123.5736, 45.5898), 4326), 32610))::numeric, 1) AS slope_degrees, ROUND(ST_Value(a.rast, ST_Transform(ST_SetSRID(ST_MakePoint(-123.5736, 45.5898), 4326), 32610))::numeric, 1) AS aspect_degrees FROM elevation_raster e JOIN slope_raster s ON e.rid = s.rid JOIN aspect_raster a ON e.rid = a.rid WHERE ST_Intersects(e.rast, ST_Transform(ST_SetSRID(ST_MakePoint(-123.5736, 45.5898), 4326), 32610));
+```
+
+---
+
 ## Phases & Stretch Goals
 
 ### Phases
@@ -305,7 +329,7 @@ SELECT o.species_name, o.common_name, COUNT(DISTINCT o.inaturalist_id) AS sighti
 - [x] **Phase 2**: Spatial schema design (`observations` point geometries, `GIST` indexing, coordinate projections)
 - [x] **Phase 3**: iNaturalist API ingestion script for Tillamook County Fungi with obscured geoprivacy tracking
 - [x] **Phase 4**: USGS PAD-US 3.0 land ownership polygon ingestion (`ogr2ogr`) and public vs. private spatial joins (`ST_Intersects`)
-- [ ] **Phase 5**: USGS 3DEP Digital Elevation Model (DEM) raster ingestion (`raster2pgsql`) and slope/aspect derivation (`ST_Slope`, `ST_Aspect`)
+- [x] **Phase 5**: USGS 3DEP Digital Elevation Model (DEM) raster ingestion (`ST_FromGDALRaster`, `ST_Tile`) and slope/aspect derivation (`ST_Slope`, `ST_Aspect`)
 - [ ] **Phase 6**: Terrain sampling at observation points (`ST_Value`) and elevation/slope/aspect distribution analysis
 - [ ] **Phase 7**: Habitat similarity query — locate under-explored Tillamook State Forest parcels matching target terrain profiles
 

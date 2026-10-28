@@ -17,10 +17,19 @@ load_dotenv()
 INAT_API_URL = "https://api.inaturalist.org/v1/observations"
 
 # iNaturalist filter parameters:
-# - taxon_id = 47170  -> Kingdom Fungi (all mushrooms)
-# - place_id = 494    -> Tillamook County, OR, US
-# - verifiable = true -> Must have coordinates, date, and not be captive/cultivated
-TAXON_ID_FUNGI = 47170
+# - place_id = 494 -> Tillamook County, OR, US
+# - Target Foraging Genera taxon_ids:
+#     47348 = Cantharellus (Golden, White & Rainbow Chanterelles)
+#     48611 = Craterellus  (Winter / Yellowfoot Chanterelles)
+#     48703 = Boletus      (King Boletes / Porcini)
+#     48496 = Pleurotus    (Oyster Mushrooms)
+#     48422 = Hydnum       (Hedgehog Mushrooms)
+#     62484 = Tricholoma   (Matsutake & Knights)
+#     63020 = Sparassis    (Cauliflower Mushrooms)
+#     49160 = Hericium     (Lion's Mane & Bear's Head)
+#     48431 = Laetiporus   (Chicken of the Woods)
+#     56830 = Morchella    (True Morels)
+TARGET_TAXON_IDS = "47348,48611,48703,48496,48422,62484,63020,49160,48431,56830"
 PLACE_ID_TILLAMOOK = 494
 
 # How many pages to fetch (200 observations per page).
@@ -70,7 +79,7 @@ def get_db_connection():
 def fetch_page(page: int) -> dict:
     """Fetch a single page of up to 200 observations from iNaturalist."""
     params = {
-        "taxon_id": TAXON_ID_FUNGI,
+        "taxon_id": TARGET_TAXON_IDS,
         "place_id": PLACE_ID_TILLAMOOK,
         "verifiable": "true",
         "geo": "true",
@@ -162,6 +171,11 @@ def main():
                 print(
                     f"  -> Processed {len(rows_to_insert)} observations (Running total: {total_inserted})"
                 )
+
+                # Stop once we reach the final page of results
+                if len(results) < PER_PAGE:
+                    print("Reached final page of results.")
+                    break
 
                 # Be polite to iNaturalist's public API (~1 request per second)
                 if page < MAX_PAGES:

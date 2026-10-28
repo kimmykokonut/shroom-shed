@@ -63,24 +63,33 @@ WHERE obscured = false AND elevation_m IS NOT NULL
 GROUP BY elevation_band
 ORDER BY elevation_band;
 
--- 6. Summary C: Terrain Profile of Target Foraging Groups (Chanterelle, Oyster, Bolete, Matsutake)
+-- 6. Summary C: All-Time Species Counts (Including Obscured) + Terrain Profile (From Accurate GPS Only)
+-- Note: Because `elevation_m` is NULL on obscured rows, AVG/MIN/MAX automatically
+-- use ONLY accurate coordinates, while COUNT(*) includes obscured sightings!
 SELECT
     species_name,
     common_name,
-    COUNT(*) AS sightings,
+    COUNT(*) AS total_sightings,
+    COUNT(*) FILTER (WHERE obscured = true) AS obscured_count,
+    COUNT(*) FILTER (WHERE obscured = false) AS accurate_count,
     ROUND(AVG(elevation_m), 0) AS avg_elev_m,
-    ROUND(MIN(elevation_m), 0) AS min_elev_m,
-    ROUND(MAX(elevation_m), 0) AS max_elev_m,
     ROUND(AVG(slope_deg), 1) AS avg_slope_deg,
     MODE() WITHIN GROUP (ORDER BY aspect_cardinal) AS most_common_aspect
 FROM observations
-WHERE obscured = false
-  AND elevation_m IS NOT NULL
-  AND (
-      common_name ILIKE '%chanterelle%'
-      OR common_name ILIKE '%bolete%'
-      OR common_name ILIKE '%oyster%'
-      OR common_name ILIKE '%matsutake%'
-  )
 GROUP BY species_name, common_name
-ORDER BY sightings DESC;
+ORDER BY total_sightings DESC
+LIMIT 20;
+
+-- 7. Summary D: Active Fruiting Window (Last 10 Days)
+SELECT
+    species_name,
+    common_name,
+    COUNT(*) AS total_last_10d,
+    COUNT(*) FILTER (WHERE obscured = false) AS accurate_last_10d,
+    ROUND(AVG(elevation_m), 0) AS active_avg_elev_m,
+    ROUND(AVG(slope_deg), 1) AS active_avg_slope_deg,
+    MODE() WITHIN GROUP (ORDER BY aspect_cardinal) AS active_aspect
+FROM observations
+WHERE observed_date >= CURRENT_DATE - INTERVAL '10 days'
+GROUP BY species_name, common_name
+ORDER BY total_last_10d DESC;

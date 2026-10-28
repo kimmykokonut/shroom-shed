@@ -30,10 +30,21 @@ Explore mushroom (Fungi) observation patterns across land ownership (PAD-US), el
 
 ## Key Data Sources & IDs Discovered
 - **iNaturalist API (`https://api.inaturalist.org/v1/observations`):**
-  - `taxon_id=47170`: Kingdom Fungi
+  - `taxon_id=47170`: Kingdom Fungi (broad lookup)
+  - Target Foraging Genera `taxon_id`s (`835` all-time sightings in Tillamook County):
+    - `47348` (*Cantharellus* — Golden/White/Rainbow Chanterelles)
+    - `48611` (*Craterellus* — Winter/Yellowfoot Chanterelles)
+    - `48703` (*Boletus* — King Boletes / Porcini)
+    - `48496` (*Pleurotus* — Oyster Mushrooms)
+    - `48422` (*Hydnum* — Hedgehog Mushrooms)
+    - `62484` (*Tricholoma* — Matsutake & Knights)
+    - `63020` (*Sparassis* — Cauliflower Mushrooms)
+    - `49160` (*Hericium* — Lion's Mane & Bear's Head)
+    - `48431` (*Laetiporus* — Chicken of the Woods)
+    - `56830` (*Morchella* — True Morels)
   - `place_id=494`: Tillamook County, OR, US (primary study area)
   - `place_id=984`: Multnomah County, OR, US (initial lookup reference)
-  - Note on `obscured`: Some foraging observations have `obscured=true` (or `geoprivacy='obscured'`), which randomizes coordinates within a ~20 km box (sometimes landing in the Pacific Ocean). We store `obscured BOOLEAN` and `inaturalist_url TEXT` in `observations` so we can keep obscured rows for county-wide species counts while filtering `WHERE obscured = false` for exact spatial/terrain queries.
+  - Note on `obscured`: Some foraging observations have `obscured=true` (e.g., 100% of *Tricholoma murrillianum* Western Matsutake are auto-obscured by iNaturalist), which randomizes coordinates within a ~20 km box. We keep obscured rows in `observations` (with `elevation_m = NULL`) so `COUNT(*)` includes them in county-wide species and seasonality counts while `AVG(elevation_m)` and spatial joins (`WHERE obscured = false`) only use accurate coordinates.
 - **USGS PAD-US 3.0 Public Access FeatureServer:**
   - Endpoint: `https://services1.arcgis.com/CD5mKowwN6nIaqd8/arcgis/rest/services/PADUS3_0_PublicAccess/FeatureServer/0/query`
   - Tillamook County bounding box: `-124.05,45.05,-123.30,45.80` (`EPSG:4326`)

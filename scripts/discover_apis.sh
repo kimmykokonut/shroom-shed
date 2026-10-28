@@ -24,3 +24,14 @@ echo ""
 echo "=== 4. List distinct PAD-US 3.0 land managers and units in Tillamook County bounding box (-124.05,45.05,-123.30,45.80) ==="
 curl -s "https://services1.arcgis.com/CD5mKowwN6nIaqd8/arcgis/rest/services/PADUS3_0_PublicAccess/FeatureServer/0/query?geometry=-124.05,45.05,-123.30,45.80&geometryType=esriGeometryEnvelope&inSR=4326&outFields=Mang_Type,Mang_Name,Unit_Nm,Des_Tp,Pub_Access&returnGeometry=false&f=json" \
   | python3 -c "import sys, json; d = json.load(sys.stdin); feats = d.get('features', []); print(f'Total features: {len(feats)}'); print('\n'.join(sorted(set(f\"{f['attributes']['Mang_Type']} | {f['attributes']['Mang_Name']} | {f['attributes']['Unit_Nm']}\" for f in feats))))"
+
+echo ""
+echo "=== 5. Lookup iNaturalist taxon_id and Tillamook County (place_id=494) counts for Target Foraging Genera ==="
+for GENUS in Cantharellus Craterellus Boletus Pleurotus Hydnum Tricholoma Sparassis Hericium Laetiporus Morchella; do
+  TAXON_INFO=$(curl -s "https://api.inaturalist.org/v1/taxa?q=${GENUS}&rank=genus&per_page=1" \
+    | python3 -c "import sys, json; r = json.load(sys.stdin)['results'][0]; print(f\"{r['id']}|{r['name']}|{r.get('preferred_common_name', '')}\")")
+  TAXON_ID=$(echo "${TAXON_INFO}" | cut -d'|' -f1)
+  COUNT=$(curl -s "https://api.inaturalist.org/v1/observations?taxon_id=${TAXON_ID}&place_id=494&verifiable=true&per_page=1" \
+    | python3 -c "import sys, json; print(json.load(sys.stdin)['total_results'])")
+  echo "  ${TAXON_INFO} -> ${COUNT} sightings in Tillamook County"
+done

@@ -327,9 +327,9 @@ SELECT e.rid AS tile_number, ROUND(ST_Value(e.rast, ST_Transform(ST_SetSRID(ST_M
 SELECT aspect_cardinal, COUNT(*) AS sightings, ROUND(AVG(elevation_m), 1) AS avg_elevation_m, ROUND(AVG(slope_deg), 1) AS avg_slope_deg FROM observations WHERE obscured = false AND aspect_cardinal IS NOT NULL GROUP BY aspect_cardinal ORDER BY sightings DESC;
 ```
 
-**Terrain profile of target foraging species (Chanterelles, Oysters, Boletes, Matsutake):**
+**Terrain profile of target foraging species (including obscured counts while averaging terrain only from accurate GPS coordinates):**
 ```sql
-SELECT species_name, common_name, COUNT(*) AS sightings, ROUND(AVG(elevation_m), 0) AS avg_elev_m, ROUND(MIN(elevation_m), 0) AS min_elev_m, ROUND(MAX(elevation_m), 0) AS max_elev_m, ROUND(AVG(slope_deg), 1) AS avg_slope_deg, MODE() WITHIN GROUP (ORDER BY aspect_cardinal) AS most_common_aspect FROM observations WHERE obscured = false AND elevation_m IS NOT NULL AND (common_name ILIKE '%chanterelle%' OR common_name ILIKE '%bolete%' OR common_name ILIKE '%oyster%' OR common_name ILIKE '%matsutake%') GROUP BY species_name, common_name ORDER BY sightings DESC;
+SELECT species_name, common_name, COUNT(*) AS total_sightings, COUNT(*) FILTER (WHERE obscured = true) AS obscured_count, COUNT(*) FILTER (WHERE obscured = false) AS accurate_count, ROUND(AVG(elevation_m), 0) AS avg_elev_m, ROUND(AVG(slope_deg), 1) AS avg_slope_deg, MODE() WITHIN GROUP (ORDER BY aspect_cardinal) AS most_common_aspect FROM observations GROUP BY species_name, common_name ORDER BY total_sightings DESC LIMIT 20;
 ```
 
 ---

@@ -1,5 +1,5 @@
--- sql/04_ownership_analysis.sql
--- Chunk 4: Explore PAD-US land ownership polygons and join with non-obscured mushroom observations.
+-- sql/03_ownership_analysis.sql
+-- Explore PAD-US land ownership polygons and join with non-obscured mushroom observations.
 
 -- 1. Count land ownership polygon features by Manager Type and Agency Name
 SELECT

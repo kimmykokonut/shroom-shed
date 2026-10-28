@@ -1,5 +1,5 @@
--- sql/06_sample_terrain.sql
--- Phase 6: Sample elevation, slope, and aspect at each non-obscured observation point
+-- sql/05_sample_terrain.sql
+-- Sample elevation, slope, and aspect at each non-obscured observation point
 -- using ST_Value(), and analyze terrain distributions where sightings cluster.
 
 -- 1. Add terrain columns to `observations`

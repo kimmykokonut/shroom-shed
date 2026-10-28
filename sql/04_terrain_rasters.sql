@@ -1,5 +1,5 @@
--- sql/05_terrain_rasters.sql
--- Phase 5: Inspect the USGS 3DEP DEM raster (`elevation_raster`) and derive
+-- sql/04_terrain_rasters.sql
+-- Inspect the USGS 3DEP DEM raster (`elevation_raster`) and derive
 -- `slope_raster` (degrees steepness) and `aspect_raster` (compass direction 0-360°).
 
 -- 1. Inspect how raster2pgsql tiled the 2000x2800 DEM into 100x100 pixel rows

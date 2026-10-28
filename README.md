@@ -45,8 +45,8 @@ Focusing on **Tillamook County and the Tillamook State Forest, OR** (where perso
 
 ## Features
 
-### 📍 iNaturalist Fungi Ingestion Pipeline
-- Pulls verifiable Kingdom Fungi (`taxon_id=47170`) sightings for Tillamook County (`place_id=494`) via Python (`requests` + `psycopg`) and converts GeoJSON `[longitude, latitude]` coordinates into indexed PostGIS `GEOMETRY(Point, 4326)` rows on insert.
+### 📍 iNaturalist Foraging Fungi Ingestion Pipeline
+- Pulls all-time verifiable sightings across **10 target foraging genera** (*Cantharellus*, *Craterellus*, *Boletus*, *Pleurotus*, *Hydnum*, *Tricholoma*, *Sparassis*, *Hericium*, *Laetiporus*, and *Morchella*) for Tillamook County (`place_id=494`) via Python (`requests` + `psycopg`) and converts GeoJSON `[longitude, latitude]` coordinates into indexed PostGIS `GEOMETRY(Point, 4326)` rows on insert.
 - **Geoprivacy & Obscured Coordinate Detection**: Flags observations where `obscured = true` (which randomizes coordinates within a ~20 km box, often landing in the Pacific Ocean along the coast) so obscured records can be retained for county-wide species counts while filtered out (`WHERE obscured = false`) for exact parcel and terrain queries.
 - **Idempotent Upserts**: Uses `ON CONFLICT (inaturalist_id) DO UPDATE` so re-running the ingestion script safely updates existing records without duplicating rows.
 
@@ -170,8 +170,8 @@ None at this time.
     ```bash
     ./scripts/download_dem.sh
     ./scripts/load_dem.sh
-    docker compose exec -T db psql -U shroom -d shroom_shed -f /sql/05_terrain_rasters.sql
-    docker compose exec -T db psql -U shroom -d shroom_shed -f /sql/06_sample_terrain.sql
+    docker compose exec -T db psql -U shroom -d shroom_shed -f /sql/04_terrain_rasters.sql
+    docker compose exec -T db psql -U shroom -d shroom_shed -f /sql/05_sample_terrain.sql
     ```
 
 ---
@@ -189,7 +189,7 @@ docker compose exec db psql -U shroom -d shroom_shed
 | :--- | :--- |
 | `\dt` | List all tables in the database |
 | `\d observations` | Describe columns, data types, and indexes of a table |
-| `\i /sql/04_ownership_analysis.sql` | Execute a `.sql` file mounted from the `sql/` folder |
+| `\i /sql/03_ownership_analysis.sql` | Execute a `.sql` file mounted from the `sql/` folder |
 | `\pset pager off` | Print full query results directly without pausing in `(END)` |
 | `\r` | Clear/reset the current SQL input buffer |
 | `q` | Exit the `(END)` pager view |
@@ -265,9 +265,9 @@ SELECT species_name, common_name, COUNT(*) AS hidden_count FROM observations WHE
 SELECT species_name, common_name, COUNT(*) AS sightings FROM observations GROUP BY species_name, common_name ORDER BY sightings DESC LIMIT 15;
 ```
 
-**Filter specifically for prized foraging mushrooms (`ILIKE` case-insensitive search):**
+**Seasonal filter (`EXTRACT(MONTH ...)`): Sightings and terrain profile specifically in October across all years:**
 ```sql
-SELECT species_name, common_name, COUNT(*) AS sightings FROM observations WHERE common_name ILIKE '%chanterelle%' OR common_name ILIKE '%bolete%' OR common_name ILIKE '%oyster%' OR common_name ILIKE '%matsutake%' GROUP BY species_name, common_name ORDER BY sightings DESC;
+SELECT species_name, common_name, COUNT(*) AS oct_total, COUNT(*) FILTER (WHERE obscured = true) AS oct_obscured, COUNT(*) FILTER (WHERE obscured = false) AS oct_accurate, ROUND(AVG(elevation_m), 0) AS oct_avg_elev_m, ROUND(AVG(slope_deg), 1) AS oct_avg_slope_deg FROM observations WHERE EXTRACT(MONTH FROM observed_date) = 10 GROUP BY species_name, common_name HAVING COUNT(*) >= 3 ORDER BY oct_total DESC;
 ```
 
 **Radius search (`ST_DWithin`): Find non-obscured mushrooms within 5,000 meters (5 km) of the Tillamook Forest Center (`-123.5736, 45.5898`):**

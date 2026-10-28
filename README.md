@@ -166,11 +166,12 @@ None at this time.
     ./scripts/load_padus.sh
     ```
 
-13. Download and load the USGS 3DEP Digital Elevation Model (DEM) raster (`EPSG:32610`), then derive slope and aspect raster tables:
+13. Download and load the USGS 3DEP Digital Elevation Model (DEM) raster (`EPSG:32610`), derive slope and aspect raster tables, and sample terrain values onto each observation:
     ```bash
     ./scripts/download_dem.sh
     ./scripts/load_dem.sh
     docker compose exec -T db psql -U shroom -d shroom_shed -f /sql/05_terrain_rasters.sql
+    docker compose exec -T db psql -U shroom -d shroom_shed -f /sql/06_sample_terrain.sql
     ```
 
 ---
@@ -321,6 +322,16 @@ SELECT COUNT(*) AS total_tiles, ST_Width(rast) AS tile_width_px, ST_Height(rast)
 SELECT e.rid AS tile_number, ROUND(ST_Value(e.rast, ST_Transform(ST_SetSRID(ST_MakePoint(-123.5736, 45.5898), 4326), 32610))::numeric, 1) AS elevation_meters, ROUND(ST_Value(s.rast, ST_Transform(ST_SetSRID(ST_MakePoint(-123.5736, 45.5898), 4326), 32610))::numeric, 1) AS slope_degrees, ROUND(ST_Value(a.rast, ST_Transform(ST_SetSRID(ST_MakePoint(-123.5736, 45.5898), 4326), 32610))::numeric, 1) AS aspect_degrees FROM elevation_raster e JOIN slope_raster s ON e.rid = s.rid JOIN aspect_raster a ON e.rid = a.rid WHERE ST_Intersects(e.rast, ST_Transform(ST_SetSRID(ST_MakePoint(-123.5736, 45.5898), 4326), 32610));
 ```
 
+**Distribution of mushroom sightings by compass aspect (`N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW`):**
+```sql
+SELECT aspect_cardinal, COUNT(*) AS sightings, ROUND(AVG(elevation_m), 1) AS avg_elevation_m, ROUND(AVG(slope_deg), 1) AS avg_slope_deg FROM observations WHERE obscured = false AND aspect_cardinal IS NOT NULL GROUP BY aspect_cardinal ORDER BY sightings DESC;
+```
+
+**Terrain profile of target foraging species (Chanterelles, Oysters, Boletes, Matsutake):**
+```sql
+SELECT species_name, common_name, COUNT(*) AS sightings, ROUND(AVG(elevation_m), 0) AS avg_elev_m, ROUND(MIN(elevation_m), 0) AS min_elev_m, ROUND(MAX(elevation_m), 0) AS max_elev_m, ROUND(AVG(slope_deg), 1) AS avg_slope_deg, MODE() WITHIN GROUP (ORDER BY aspect_cardinal) AS most_common_aspect FROM observations WHERE obscured = false AND elevation_m IS NOT NULL AND (common_name ILIKE '%chanterelle%' OR common_name ILIKE '%bolete%' OR common_name ILIKE '%oyster%' OR common_name ILIKE '%matsutake%') GROUP BY species_name, common_name ORDER BY sightings DESC;
+```
+
 ---
 
 ## Phases & Stretch Goals
@@ -331,7 +342,7 @@ SELECT e.rid AS tile_number, ROUND(ST_Value(e.rast, ST_Transform(ST_SetSRID(ST_M
 - [x] **Phase 3**: iNaturalist API ingestion script for Tillamook County Fungi with obscured geoprivacy tracking
 - [x] **Phase 4**: USGS PAD-US 3.0 land ownership polygon ingestion (`ogr2ogr`) and public vs. private spatial joins (`ST_Intersects`)
 - [x] **Phase 5**: USGS 3DEP Digital Elevation Model (DEM) raster ingestion (`ST_FromGDALRaster`, `ST_Tile`) and slope/aspect derivation (`ST_Slope`, `ST_Aspect`)
-- [ ] **Phase 6**: Terrain sampling at observation points (`ST_Value`) and elevation/slope/aspect distribution analysis
+- [x] **Phase 6**: Terrain sampling at observation points (`ST_Value`) and elevation/slope/aspect distribution analysis
 - [ ] **Phase 7**: Habitat similarity query — locate under-explored Tillamook State Forest parcels matching target terrain profiles
 
 ### Stretch

@@ -170,8 +170,22 @@ None at this time.
     ```bash
     ./scripts/download_dem.sh
     ./scripts/load_dem.sh
-    docker compose exec -T db psql -U shroom -d shroom_shed -f /sql/04_terrain_rasters.sql
-    docker compose exec -T db psql -U shroom -d shroom_shed -f /sql/05_sample_terrain.sql
+    ```
+    Then inside `psql` (`shroom_shed=#`):
+    ```sql
+    \i /sql/04_terrain_rasters.sql
+    \i /sql/05_sample_terrain.sql
+    ```
+
+14. Download and load the 2024 NLCD Tree Canopy Cover (`0–100%`), NLCD Land Cover, and USFS FIA Dominant Forest Type Group rasters (`EPSG:32610`), sample onto observations, and run the multi-layer habitat discovery query:
+    ```bash
+    ./scripts/download_trees.sh
+    ./scripts/load_trees.sh
+    ```
+    Then inside `psql` (`shroom_shed=#`):
+    ```sql
+    \i /sql/06_sample_trees.sql
+    \i /sql/07_habitat_search.sql
     ```
 
 ---
@@ -334,21 +348,50 @@ SELECT species_name, common_name, COUNT(*) AS total_sightings, COUNT(*) FILTER (
 
 ---
 
+### 5. Tree Canopy Cover, Land Cover & Dominant Tree Species (NLCD + USFS FIA)
+
+Three `EPSG:32610` vegetation rasters (`canopy_raster`, `landcover_raster`, and `forest_type_raster`) stamp each accurate mushroom observation with its tree canopy percentage (`0–100%`), NLCD land cover class (`Evergreen`, `Mixed`, `Deciduous`), and USFS FIA dominant tree host group (`Douglas-fir`, `Western Hemlock / Sitka Spruce`, `Red Alder / Bigleaf Maple`, `Shore Pine / Lodgepole Pine`).
+
+**Sightings by USFS Dominant Tree Species Group (`tree_group`):**
+```sql
+SELECT tree_group, fia_code, COUNT(*) AS sightings, ROUND(AVG(canopy_pct), 0) AS avg_canopy_pct, ROUND(AVG(elevation_m), 0) AS avg_elev_m, ROUND(AVG(slope_deg), 1) AS avg_slope_deg FROM observations WHERE obscured = false GROUP BY tree_group, fia_code ORDER BY sightings DESC;
+```
+
+**Complete ecological profile per mushroom species (Elevation + Slope + Aspect + Canopy % + Land Cover + Dominant Tree Host):**
+```sql
+SELECT species_name, common_name, COUNT(*) AS total, COUNT(*) FILTER (WHERE obscured = false) AS accurate, ROUND(AVG(elevation_m), 0) AS elev_m, ROUND(AVG(slope_deg), 1) AS slope_deg, MODE() WITHIN GROUP (ORDER BY aspect_cardinal) AS aspect, ROUND(AVG(canopy_pct), 0) AS canopy_pct, MODE() WITHIN GROUP (ORDER BY landcover_type) AS dominant_landcover, MODE() WITHIN GROUP (ORDER BY tree_group) FILTER (WHERE fia_code IS NOT NULL) AS dominant_trees FROM observations GROUP BY species_name, common_name ORDER BY total DESC LIMIT 20;
+```
+
+---
+
+### 6. Multi-Layer Habitat Discovery (`sql/07_habitat_search.sql`)
+
+Screens all `560` raster tiles across Tillamook County by combining **Terrain Rasters** (`150m–450m` elevation, `8°–22°` slope, non-South aspect), **Forest & Canopy Rasters** (`>= 70%` closed-canopy mature `Douglas-fir` or `Western Hemlock / Sitka Spruce`), **PAD-US Open Access Public Lands** (`SLB` Tillamook State Forest, `USFS` Siuslaw National Forest, `BLM`), and **Unexplored Gaps** (`NOT EXISTS` within `2,000m` of any existing iNaturalist sighting):
+
+```sql
+\i /sql/07_habitat_search.sql
+```
+
+---
+
 ## Phases & Stretch Goals
 
 ### Phases
 - [x] **Phase 1**: Containerized PostgreSQL 16 + PostGIS 3.4 (`postgis` & `postgis_raster`) and on-demand GDAL CLI setup
 - [x] **Phase 2**: Spatial schema design (`observations` point geometries, `GIST` indexing, coordinate projections)
-- [x] **Phase 3**: iNaturalist API ingestion script for Tillamook County Fungi with obscured geoprivacy tracking
-- [x] **Phase 4**: USGS PAD-US 3.0 land ownership polygon ingestion (`ogr2ogr`) and public vs. private spatial joins (`ST_Intersects`)
-- [x] **Phase 5**: USGS 3DEP Digital Elevation Model (DEM) raster ingestion (`ST_FromGDALRaster`, `ST_Tile`) and slope/aspect derivation (`ST_Slope`, `ST_Aspect`)
-- [x] **Phase 6**: Terrain sampling at observation points (`ST_Value`) and elevation/slope/aspect distribution analysis
-- [ ] **Phase 7**: Habitat similarity query — locate under-explored Tillamook State Forest parcels matching target terrain profiles
+- [x] **Phase 3**: iNaturalist API ingestion script for Tillamook County target foraging genera with obscured geoprivacy tracking
+- [x] **Phase 4**: USGS PAD-US 3.0 land ownership polygon ingestion (`ogr2ogr`) and public vs. private spatial joins (`ST_Intersects`) (`sql/03_ownership_analysis.sql`)
+- [x] **Phase 5**: USGS 3DEP Digital Elevation Model (DEM) raster ingestion (`ST_FromGDALRaster`, `ST_Tile`) and slope/aspect derivation (`ST_Slope`, `ST_Aspect`) (`sql/04_terrain_rasters.sql`)
+- [x] **Phase 6**: Terrain sampling at observation points (`ST_Value`) and elevation/slope/aspect distribution analysis (`sql/05_sample_terrain.sql`)
+- [x] **Phase 7**: 2024 NLCD Tree Canopy Cover (`0–100%`), Land Cover Class, and USFS FIA Dominant Tree Species Group sampling (`sql/06_sample_trees.sql`)
+- [x] **Phase 8**: Multi-layer habitat discovery query — locate under-explored public forest tracts matching target terrain, canopy, and host tree profiles (`sql/07_habitat_search.sql`)
 
 ### Stretch
-- [ ] **NLCD Tree Canopy & Forest Type Raster**: Sample canopy cover percentage (`0–100%`) and forest classification (Evergreen vs. Deciduous vs. Mixed) at each mushroom sighting
+- [ ] **Data-Driven Lookalike Scoring**: Dynamically compute target mean, standard deviation, and host tree profiles directly from `observations` for any chosen species and rank tiles by similarity score
+- [ ] **Live Vector Tiles (`pg_tileserv`)**: Expose PostGIS tables and parameterized habitat search functions as live vector tiles (`http://localhost:7800`)
+- [ ] **USFS MVUM / ODF Forest Roads Overlay**: Filter and rank predicted foraging zones by proximity (`ST_DWithin`) to drivable Motor Vehicle Use Map (MVUM) forest roads and trailhead entry points
+- [ ] **USDA NRCS SSURGO / STATSGO2 Soil Survey Overlay**: Correlate mushroom sightings with soil drainage class, pH, and sandy vs. volcanic loamy soils
 - [ ] **NOAA GHCN-Daily Precipitation Join**: Correlate sighting frequency with cumulative 7–14 day rainfall from nearest weather stations
-- [ ] **Interactive Map Frontend**: Lightweight FastAPI/Flask + Leaflet or Jupyter + GeoPandas visualization layer
 
 ---
 
@@ -373,3 +416,4 @@ Data providers:
 - [iNaturalist API](https://api.inaturalist.org/v1/docs/)
 - [USGS Protected Areas Database of the United States (PAD-US 3.0)](https://www.usgs.gov/programs/gap-analysis-project/science/pad-us-data-overview)
 - [USGS 3D Elevation Program (3DEP)](https://www.usgs.gov/3d-elevation-program)
+- [USFS Enterprise Data Warehouse (EDW) & MRLC National Land Cover Database (NLCD)](https://www.mrlc.gov/)

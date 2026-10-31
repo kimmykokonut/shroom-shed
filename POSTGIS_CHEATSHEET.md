@@ -177,6 +177,18 @@ SELECT ST_Distance(
 ) AS distance_meters;
 ```
 
+#### [`ST_Intersection(geomA, geomB)`](https://postgis.net/docs/manual-3.4/ST_Intersection.html)
+
+Unlike `ST_Intersects` (which returns `true`/`false`), `ST_Intersection` acts like a cookie-cutter and returns a **new geometry** representing the exact overlapping area shared by `geomA` and `geomB`.
+
+#### [`ST_Area(geom)`](https://postgis.net/docs/manual-3.4/ST_Area.html)
+
+Calculates the surface area of a polygon in the units of its SRID (e.g., square meters when in `EPSG:32610`; divide by `4046.86` to convert square meters to acres).
+
+#### [`ST_Centroid(geom)`](https://postgis.net/docs/manual-3.4/ST_Centroid.html) / [`ST_X(point)`](https://postgis.net/docs/manual-3.4/ST_X.html) / [`ST_Y(point)`](https://postgis.net/docs/manual-3.4/ST_Y.html)
+
+`ST_Centroid(geom)` returns the geometric center `Point` (bull's-eye) of any polygon or multipolygon. `ST_X(point)` extracts the Longitude (`X`) and `ST_Y(point)` extracts the Latitude (`Y`) from a `4326` point.
+
 ---
 
 ### Raster & Terrain Functions
@@ -231,7 +243,7 @@ SELECT rid, ST_Aspect(rast, 1, '32BF', 'DEGREES') AS rast FROM elevation_raster;
 
 #### [`ST_Value(rast, point)`](https://postgis.net/docs/manual-3.4/RT_ST_Value.html) / [`ST_Intersects(rast, geom)`](https://postgis.net/docs/manual-3.4/RT_ST_Intersects.html)
 
-Extracts the numeric pixel value from a raster tile `rast` at the exact location of `point` (both `rast` and `point` must share the same SRID).
+Extracts the numeric pixel value from a raster tile `rast` at the exact location of `point` (both `rast` and `point` must share the same SRID), or at a specific pixel `(column_x, row_y)` coordinate such as `ST_Value(rast, 50, 50)`.
 
 ```sql
 SELECT ST_Value(e.rast, ST_Transform(o.geom, 32610)) AS elevation_meters
@@ -239,6 +251,10 @@ FROM observations o
 JOIN elevation_raster e ON ST_Intersects(e.rast, ST_Transform(o.geom, 32610))
 LIMIT 5;
 ```
+
+#### [`ST_SummaryStats(rast)`](https://postgis.net/docs/manual-3.4/RT_ST_SummaryStats.html)
+
+Computes summary statistics (`count`, `sum`, `mean`, `stddev`, `min`, `max`) across all non-NoData pixels in a raster tile. Access individual fields using composite dot notation: `(ST_SummaryStats(rast)).mean`.
 
 ---
 
@@ -254,7 +270,10 @@ LIMIT 5;
   - `JOIN`: Combines rows from two tables where the `ON` condition is `true`, dropping unmatched rows.
   - `LEFT JOIN`: Keeps all rows from the left table; if no match exists in the right table, right-side columns return `NULL`.
 - **[`COALESCE(col, 'default')`](https://www.postgresql.org/docs/16/functions-conditional.html#FUNCTIONS-COALESCE-NVL-IFNULL)**: Returns the first non-`NULL` value.
-- **[`WITH cte_name AS (...)`](https://www.postgresql.org/docs/16/queries-with.html)**: Defines a temporary named result set (**Common Table Expression**) for use in the main query.
+- **[`WITH cte_name AS (...)`](https://www.postgresql.org/docs/16/queries-with.html)** / **`WITH cte_name AS MATERIALIZED (...)`**: Defines a temporary named result set (**Common Table Expression**). Adding `MATERIALIZED` forces PostgreSQL to compute and cache the CTE once rather than inlining expensive spatial functions multiple times.
+- **[`COUNT(*) FILTER (WHERE condition)`](https://www.postgresql.org/docs/16/sql-expressions.html#SYNTAX-AGGREGATES)**: Counts or aggregates only the subset of rows matching `condition` inside a `GROUP BY` query.
+- **[`MODE() WITHIN GROUP (ORDER BY col)`](https://www.postgresql.org/docs/16/functions-aggregate.html#FUNCTIONS-ORDEREDSET-TABLE)**: Ordered-set aggregate function that returns the most frequent (modal) value in a group (e.g., the most common compass aspect or dominant tree species group).
+- **[`SELECT DISTINCT ON (col)`](https://www.postgresql.org/docs/16/sql-select.html#SQL-DISTINCT)**: Keeps only the first row for each unique value of `col` according to the `ORDER BY` clause.
 - **[`ALTER TABLE ... ADD COLUMN`](https://www.postgresql.org/docs/16/sql-altertable.html)**: Adds a new column to an existing table without dropping data.
 - **[`UPDATE table SET col = val`](https://www.postgresql.org/docs/16/sql-update.html)**: Modifies column values across existing rows.
 - **[`ON CONFLICT (key) DO UPDATE / DO NOTHING`](https://www.postgresql.org/docs/16/sql-insert.html#SQL-ON-CONFLICT)**: Handles duplicate primary keys during `INSERT` (an **Upsert**), either updating specified fields via `EXCLUDED.col` or skipping the duplicate row.

@@ -35,3 +35,32 @@ for GENUS in Cantharellus Craterellus Boletus Pleurotus Hydnum Tricholoma Sparas
     | python3 -c "import sys, json; print(json.load(sys.stdin)['total_results'])")
   echo "  ${TAXON_INFO} -> ${COUNT} sightings in Tillamook County"
 done
+
+echo ""
+echo "=== 6. Search ArcGIS / USFS / USGS ImageServers for NLCD Tree Canopy & Land Cover ==="
+curl -sG "https://www.arcgis.com/sharing/rest/search" \
+  --data-urlencode 'q=(NLCD OR "Tree Canopy" OR "Land Cover" OR "Forest Type") AND type:"Image Service"' \
+  --data-urlencode "num=10" \
+  --data-urlencode "f=json" \
+  | python3 -c "import sys, json; d = json.load(sys.stdin); print('\n'.join(f'{r[\"title\"]} ({r.get(\"owner\")}) -> {r.get(\"url\")}' for r in d.get('results', [])))"
+
+echo ""
+echo "=== 7. Check latest year OBJECTID in USFS GeoPlatform Canopy & Landcover ImageServices ==="
+for SVC in USFS_EDW_NLCD_TCC_CONUS USFS_EDW_NLCD_Landcover_CONUS; do
+  echo "--- ${SVC} catalog items ---"
+  curl -sG "https://imagery.geoplatform.gov/iipp/rest/services/Vegetation/${SVC}/ImageServer/query" \
+    --data-urlencode "where=1=1" \
+    --data-urlencode "outFields=*" \
+    --data-urlencode "returnGeometry=false" \
+    --data-urlencode "f=json" \
+    | python3 -c "import sys, json; d = json.load(sys.stdin); feats = d.get('features', []); print('Total slices:', len(feats)); print('First:', feats[0]['attributes'] if feats else None); print('Last:', feats[-1]['attributes'] if feats else None)"
+done
+
+echo ""
+echo "=== 8. Inspect Legend (Category Codes) for Forest Type Groups & Land Cover ==="
+for SVC in USFS_EDW_FIA_ForestAtlas_ForestTypeGroups_109_CONUS USFS_EDW_NLCD_Landcover_CONUS; do
+  echo "--- ${SVC} Legend ---"
+  curl -sG "https://imagery.geoplatform.gov/iipp/rest/services/Vegetation/${SVC}/ImageServer/legend" \
+    --data-urlencode "f=json" \
+    | python3 -c "import sys, json; d = json.load(sys.stdin); layers = d.get('layers', []); print('\n'.join(f\"{item.get('values', item.get('label'))}: {item.get('label')}\" for l in layers for item in l.get('legend', [])))"
+done

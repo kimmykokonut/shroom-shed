@@ -12,6 +12,11 @@ CREATE TABLE IF NOT EXISTS observations (
     slope_deg NUMERIC(4,1),
     aspect_deg NUMERIC(5,1),
     aspect_cardinal TEXT,
+    canopy_pct SMALLINT,
+    landcover_code SMALLINT,
+    landcover_type TEXT,
+    fia_code SMALLINT,
+    tree_group TEXT,
     geom GEOMETRY(Point, 4326) NOT NULL
 );
 

@@ -64,3 +64,55 @@ for SVC in USFS_EDW_FIA_ForestAtlas_ForestTypeGroups_109_CONUS USFS_EDW_NLCD_Lan
     --data-urlencode "f=json" \
     | python3 -c "import sys, json; d = json.load(sys.stdin); layers = d.get('layers', []); print('\n'.join(f\"{item.get('values', item.get('label'))}: {item.get('label')}\" for l in layers for item in l.get('legend', [])))"
 done
+
+echo ""
+echo "=== 9. Inspect USFS MVUM Roads (EDW_MVUM_01/MapServer/1) & Oregon Forestry Roads in Tillamook County ==="
+curl -sG "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/1/query" \
+  --data-urlencode "geometry=-124.05,45.05,-123.30,45.80" \
+  --data-urlencode "geometryType=esriGeometryEnvelope" \
+  --data-urlencode "inSR=4326" \
+  --data-urlencode "outFields=*" \
+  --data-urlencode "returnGeometry=false" \
+  --data-urlencode "f=json" \
+  | python3 -c "import sys, json; d = json.load(sys.stdin); feats = d.get('features', []); print('USFS MVUM Roads in Tillamook bbox:', len(feats)); print('Sample attributes:', feats[0]['attributes'] if feats else None)"
+
+echo "--- ODF Mainline_TMA_Roads_view & Open Surfaced North_Coast_Roads ---"
+curl -sG "https://services.arcgis.com/uUvqNMGPm7axC2dD/arcgis/rest/services/Mainline_TMA_Roads_view/FeatureServer/0/query" \
+  --data-urlencode "geometry=-124.05,45.05,-123.30,45.80" \
+  --data-urlencode "geometryType=esriGeometryEnvelope" \
+  --data-urlencode "inSR=4326" \
+  --data-urlencode "outFields=*" \
+  --data-urlencode "returnGeometry=false" \
+  --data-urlencode "f=json" \
+  | python3 -c "import sys, json; d = json.load(sys.stdin); feats = d.get('features', []); print('Mainline_TMA_Roads_view count:', len(feats)); print('Sample:', feats[0]['attributes'] if feats else d)"
+
+echo "--- Check Public Highways, County Roads, Mainlines & Collectors in ODF North_Coast_Roads ---"
+curl -sG "https://services.arcgis.com/uUvqNMGPm7axC2dD/arcgis/rest/services/North_Coast_Roads/FeatureServer/0/query" \
+  --data-urlencode "geometry=-124.05,45.05,-123.30,45.80" \
+  --data-urlencode "geometryType=esriGeometryEnvelope" \
+  --data-urlencode "inSR=4326" \
+  --data-urlencode "where=Status='O' AND Surface='Surfaced' AND Ownership IN ('ODF','USFS','BLM','CNTY','STATE','FED') AND Class IN ('A','P','M','C')" \
+  --data-urlencode "outFields=Ownership,Class,Official_N" \
+  --data-urlencode "returnGeometry=false" \
+  --data-urlencode "f=json" \
+  | python3 -c "import sys, json; from collections import Counter; d = json.load(sys.stdin); feats = d.get('features', []); print('Public Arterials/Paved/Mainlines/Collectors:', len(feats)); print(Counter((f['attributes']['Ownership'], f['attributes']['Class']) for f in feats)); print('Sample Highway/County/Forest names:', sorted({f['attributes']['Official_N'].strip() for f in feats if f['attributes']['Official_N'].strip()})[:30])"
+
+echo "--- Check USFS Recreation Sites / Trailheads (EDW_InfraRecreationSites_01/MapServer/0) ---"
+curl -sG "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_InfraRecreationSites_01/MapServer/0/query" \
+  --data-urlencode "geometry=-124.05,45.05,-123.30,45.80" \
+  --data-urlencode "geometryType=esriGeometryEnvelope" \
+  --data-urlencode "inSR=4326" \
+  --data-urlencode "outFields=*" \
+  --data-urlencode "returnGeometry=false" \
+  --data-urlencode "f=json" \
+  | python3 -c "import sys, json; d = json.load(sys.stdin); feats = d.get('features', []); print('USFS Rec/Trailhead sites:', len(feats)); print('\n'.join(str(f['attributes']) for f in feats[:5]))"
+
+echo "--- Check ODF Trailheads & Recreation Points ---"
+curl -sG "https://services.arcgis.com/uUvqNMGPm7axC2dD/arcgis/rest/services/StateForests_RecreationPtsOregonGOV_PublicView/FeatureServer/0/query" \
+  --data-urlencode "geometry=-124.05,45.05,-123.30,45.80" \
+  --data-urlencode "geometryType=esriGeometryEnvelope" \
+  --data-urlencode "inSR=4326" \
+  --data-urlencode "outFields=*" \
+  --data-urlencode "returnGeometry=false" \
+  --data-urlencode "f=json" \
+  | python3 -c "import sys, json; d = json.load(sys.stdin); feats = d.get('features', []); print('ODF Recreation/Trailhead points in Tillamook:', len(feats)); print('\n'.join(str(f['attributes']) for f in feats[:10]))"

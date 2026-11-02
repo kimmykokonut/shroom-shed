@@ -189,6 +189,18 @@ Calculates the surface area of a polygon in the units of its SRID (e.g., square 
 
 `ST_Centroid(geom)` returns the geometric center `Point` (bull's-eye) of any polygon or multipolygon. `ST_X(point)` extracts the Longitude (`X`) and `ST_Y(point)` extracts the Latitude (`Y`) from a `4326` point.
 
+#### [`ST_Length(geom)`](https://postgis.net/docs/manual-3.4/ST_Length.html)
+
+Calculates the 2D length of a `LineString` or `MultiLineString` (such as a forest road) in the units of its SRID (meters when transformed to `EPSG:32610`; divide by `1609.34` to convert meters into miles).
+
+#### [`geomA <-> geomB` (Nearest-Neighbor / KNN Operator)](https://postgis.net/docs/manual-3.4/geometry_distance_knn.html)
+
+Returns the distance between two geometries and, when used inside `ORDER BY ... LIMIT 1` (often with `CROSS JOIN LATERAL`), uses the `GIST` spatial index to perform an ultra-fast K-Nearest Neighbor (KNN) search.
+
+#### [`ST_ClosestPoint(geomA, geomB)`](https://postgis.net/docs/manual-3.4/ST_ClosestPoint.html)
+
+Returns the 2D `Point` on `geomA` (e.g., a `MultiLineString` forest road) that is closest to `geomB` (e.g., the center of a target mushroom zone)—ideal for finding roadside parking/pull-off coordinates.
+
 ---
 
 ### Raster & Terrain Functions

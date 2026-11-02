@@ -188,6 +188,16 @@ None at this time.
     \i /sql/07_habitat_search.sql
     ```
 
+15. Download and load Public Forest Roads (`USFS MVUM` + `ODF North Coast` State Highways, County Roads, & Forest Mainlines/Collectors) and Official State Forest Trailheads (`trailheads`), then find road & trailhead entry points for each target habitat zone:
+    ```bash
+    ./scripts/download_roads.sh
+    ./scripts/load_roads.sh
+    ```
+    Then inside `psql` (`shroom_shed=#`):
+    ```sql
+    \i /sql/08_road_access.sql
+    ```
+
 ---
 
 ### Connecting to the Database
@@ -385,11 +395,11 @@ Screens all `560` raster tiles across Tillamook County by combining **Terrain Ra
 - [x] **Phase 6**: Terrain sampling at observation points (`ST_Value`) and elevation/slope/aspect distribution analysis (`sql/05_sample_terrain.sql`)
 - [x] **Phase 7**: 2024 NLCD Tree Canopy Cover (`0–100%`), Land Cover Class, and USFS FIA Dominant Tree Species Group sampling (`sql/06_sample_trees.sql`)
 - [x] **Phase 8**: Multi-layer habitat discovery query — locate under-explored public forest tracts matching target terrain, canopy, and host tree profiles (`sql/07_habitat_search.sql`)
+- [x] **Phase 9**: USFS MVUM & ODF Public Forest Roads (`MultiLineString`) + State Forest Trailheads (`Point`) overlay using KNN (`<->`) and `ST_ClosestPoint` (`sql/08_road_access.sql`)
 
 ### Stretch
-- [ ] **Data-Driven Lookalike Scoring**: Dynamically compute target mean, standard deviation, and host tree profiles directly from `observations` for any chosen species and rank tiles by similarity score
 - [ ] **Live Vector Tiles (`pg_tileserv`)**: Expose PostGIS tables and parameterized habitat search functions as live vector tiles (`http://localhost:7800`)
-- [ ] **USFS MVUM / ODF Forest Roads Overlay**: Filter and rank predicted foraging zones by proximity (`ST_DWithin`) to drivable Motor Vehicle Use Map (MVUM) forest roads and trailhead entry points
+- [ ] **Data-Driven Lookalike Scoring**: Dynamically compute target mean, standard deviation, and host tree profiles directly from `observations` for any chosen species and rank tiles by similarity score
 - [ ] **USDA NRCS SSURGO / STATSGO2 Soil Survey Overlay**: Correlate mushroom sightings with soil drainage class, pH, and sandy vs. volcanic loamy soils
 - [ ] **NOAA GHCN-Daily Precipitation Join**: Correlate sighting frequency with cumulative 7–14 day rainfall from nearest weather stations
 

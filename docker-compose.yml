@@ -20,6 +20,20 @@ services:
       - ./sql:/sql
       - ./data:/data
 
+  # Crunchy Data pg_tileserv: Live PostGIS Vector Tile Server & Map UI
+  # Automatically exposes PostGIS tables, views, and SQL functions at http://localhost:7800
+  tileserv:
+    image: pramsey/pg_tileserv:latest
+    platform: linux/amd64
+    container_name: shroom_tileserv
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    ports:
+      - "7800:7800"
+
   # Containerized GDAL CLI (ogr2ogr, gdalwarp, gdalinfo)
   # Uses a profile so `docker compose up -d` only runs the database,
   # while `docker compose run --rm gdal <cmd>` runs GDAL on demand.

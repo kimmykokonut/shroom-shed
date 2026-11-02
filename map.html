@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Shroom Shed — PostGIS + pg_tileserv + MapLibre GL</title>
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <style>
+    body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+
+    .control-panel {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 2;
+      background: rgba(20, 24, 28, 0.92);
+      color: #f0f4f8;
+      padding: 14px 16px;
+      border-radius: 10px;
+      width: 330px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+      font-size: 13px;
+    }
+    .control-panel h2 {
+      margin: 0 0 4px 0;
+      font-size: 16px;
+      color: #6ee7b7;
+    }
+    .control-panel p.subtitle {
+      margin: 0 0 12px 0;
+      font-size: 11.5px;
+      color: #94a3b8;
+    }
+    .section-title {
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #94a3b8;
+      margin: 10px 0 6px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+      padding-top: 8px;
+    }
+    label.layer-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 6px 0;
+      cursor: pointer;
+      user-select: none;
+    }
+    .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .swatch.circle { border-radius: 50%; }
+    .swatch.line { height: 3px; border-radius: 0; }
+
+    .basemap-select {
+      width: 100%;
+      padding: 5px 8px;
+      border-radius: 6px;
+      border: 1px solid #475569;
+      background: #1e293b;
+      color: #f8fafc;
+      font-size: 12.5px;
+    }
+    .maplibregl-popup-content {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 12.5px;
+      line-height: 1.45;
+      padding: 12px 14px;
+      border-radius: 8px;
+      max-width: 300px;
+    }
+    .popup-title {
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 6px;
+      color: #0f172a;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="control-panel">
+  <h2>🍄 Shroom Shed GIS</h2>
+  <p class="subtitle">Tillamook County, OR • PostGIS + pg_tileserv</p>
+
+  <div class="section-title">Basemap (No API Key Required)</div>
+  <select id="basemap-select" class="basemap-select">
+    <option value="usgs-topo" selected>USGS National Map Topo (Contours)</option>
+    <option value="usgs-imagery">USGS Satellite + Topo Hybrid (Canopy View)</option>
+    <option value="street">World Street &amp; Road Map</option>
+  </select>
+
+  <div class="section-title">Formulated Predictions (From Sighting Data)</div>
+
+  <label class="layer-toggle">
+    <input type="checkbox" data-layer="recommended_search_areas" checked />
+    <span class="swatch" style="background: rgba(16, 185, 129, 0.45); border: 2px solid #059669;"></span>
+    <span><b>Recommended Search Areas</b> (<code>recommended_search_areas</code>)</span>
+  </label>
+
+  <label class="layer-toggle">
+    <input type="checkbox" data-layer="search_area_parking_pins" checked />
+    <span class="swatch circle" style="background: #38bdf8; border: 2px solid #0284c7;"></span>
+    <span><b>Search Area Parking Pins</b> (<code>search_area_parking_pins</code>)</span>
+  </label>
+
+  <div class="section-title">Source Spatial Layers</div>
+
+  <label class="layer-toggle">
+    <input type="checkbox" data-layer="accurate_observations" checked />
+    <span class="swatch circle" style="background: #f59e0b; border: 1.5px solid #fff;"></span>
+    <span><b>Existing iNat Sightings</b> (<code>accurate_observations</code>)</span>
+  </label>
+
+  <label class="layer-toggle">
+    <input type="checkbox" data-layer="trailheads" checked />
+    <span class="swatch circle" style="background: #a855f7; border: 1.5px solid #fff;"></span>
+    <span><b>Trailheads &amp; Camps</b> (<code>trailheads</code>)</span>
+  </label>
+
+  <label class="layer-toggle">
+    <input type="checkbox" data-layer="forest_roads" checked />
+    <span class="swatch line" style="background: #d97706;"></span>
+    <span><b>Public Roads &amp; MVUM</b> (<code>forest_roads</code>)</span>
+  </label>
+
+  <label class="layer-toggle">
+    <input type="checkbox" data-layer="land_ownership" checked />
+    <span class="swatch" style="background: rgba(34, 197, 94, 0.15); border: 1px solid #15803d;"></span>
+    <span><b>PAD-US Public Lands</b> (<code>land_ownership</code>)</span>
+  </label>
+</div>
+
+<div id="map"></div>
+
+<script>
+  const TILESERV_URL = "http://localhost:7800";
+
+  const map = new maplibregl.Map({
+    container: "map",
+    center: [-123.62, 45.45],
+    zoom: 9.5,
+    style: {
+      version: 8,
+      sources: {
+        "usgs-topo": {
+          type: "raster",
+          tiles: ["https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}"],
+          tileSize: 256,
+          attribution: "USGS The National Map"
+        },
+        "usgs-imagery": {
+          type: "raster",
+          tiles: ["https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryTopo/MapServer/tile/{z}/{y}/{x}"],
+          tileSize: 256,
+          attribution: "USGS Imagery + Topo"
+        },
+        "street": {
+          type: "raster",
+          tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"],
+          tileSize: 256,
+          attribution: "Esri, USGS, NOAA"
+        }
+      },
+      layers: [
+        { id: "usgs-topo-layer", type: "raster", source: "usgs-topo" },
+        { id: "usgs-imagery-layer", type: "raster", source: "usgs-imagery", layout: { visibility: "none" } },
+        { id: "street-layer", type: "raster", source: "street", layout: { visibility: "none" } }
+      ]
+    }
+  });
+
+  map.addControl(new maplibregl.NavigationControl(), "top-right");
+
+  map.on("load", () => {
+    // 1. PAD-US Public Land Ownership (MultiPolygon)
+    map.addSource("land_ownership", {
+      type: "vector",
+      tiles: [`${TILESERV_URL}/public.land_ownership/{z}/{x}/{y}.pbf`]
+    });
+    map.addLayer({
+      id: "land_ownership-fill",
+      type: "fill",
+      source: "land_ownership",
+      "source-layer": "public.land_ownership",
+      paint: {
+        "fill-color": [
+          "match", ["get", "mang_name"],
+          "SLB", "#16a34a",
+          "USFS", "#0d9488",
+          "BLM", "#eab308",
+          "#64748b"
+        ],
+        "fill-opacity": 0.18
+      }
+    });
+    map.addLayer({
+      id: "land_ownership-outline",
+      type: "line",
+      source: "land_ownership",
+      "source-layer": "public.land_ownership",
+      paint: { "line-color": "#15803d", "line-width": 1, "line-opacity": 0.5 }
+    });
+
+    // 2. Public Forest Roads, County Roads & State Highways (MultiLineString)
+    map.addSource("forest_roads", {
+      type: "vector",
+      tiles: [`${TILESERV_URL}/public.forest_roads/{z}/{x}/{y}.pbf`]
+    });
+    map.addLayer({
+      id: "forest_roads-line",
+      type: "line",
+      source: "forest_roads",
+      "source-layer": "public.forest_roads",
+      paint: {
+        "line-color": "#b45309",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 8, 1, 13, 2.5],
+        "line-opacity": 0.85
+      }
+    });
+
+    // 3. Recommended Search Areas: Unexplored 3km x 3km Mushroom Habitat Rectangles (Polygon)
+    map.addSource("recommended_search_areas", {
+      type: "vector",
+      tiles: [`${TILESERV_URL}/public.recommended_search_areas/{z}/{x}/{y}.pbf`]
+    });
+    map.addLayer({
+      id: "recommended_search_areas-fill",
+      type: "fill",
+      source: "recommended_search_areas",
+      "source-layer": "public.recommended_search_areas",
+      paint: {
+        "fill-color": "#10b981",
+        "fill-opacity": 0.42
+      }
+    });
+    map.addLayer({
+      id: "recommended_search_areas-outline",
+      type: "line",
+      source: "recommended_search_areas",
+      "source-layer": "public.recommended_search_areas",
+      paint: {
+        "line-color": "#047857",
+        "line-width": 2.5
+      }
+    });
+
+    // 4. Official Trailheads & Campgrounds (Point)
+    map.addSource("trailheads", {
+      type: "vector",
+      tiles: [`${TILESERV_URL}/public.trailheads/{z}/{x}/{y}.pbf`]
+    });
+    map.addLayer({
+      id: "trailheads-circle",
+      type: "circle",
+      source: "trailheads",
+      "source-layer": "public.trailheads",
+      paint: {
+        "circle-radius": 6,
+        "circle-color": "#a855f7",
+        "circle-stroke-width": 1.5,
+        "circle-stroke-color": "#ffffff"
+      }
+    });
+
+    // 5. Roadside Parking / Pull-Off Pins for Recommended Search Areas (Point)
+    map.addSource("search_area_parking_pins", {
+      type: "vector",
+      tiles: [`${TILESERV_URL}/public.search_area_parking_pins/{z}/{x}/{y}.pbf`]
+    });
+    map.addLayer({
+      id: "search_area_parking_pins-circle",
+      type: "circle",
+      source: "search_area_parking_pins",
+      "source-layer": "public.search_area_parking_pins",
+      paint: {
+        "circle-radius": 7,
+        "circle-color": "#38bdf8",
+        "circle-stroke-width": 2,
+        "circle-stroke-color": "#0369a1"
+      }
+    });
+
+    // 6. Accurate iNaturalist Mushroom Sightings (Point)
+    map.addSource("accurate_observations", {
+      type: "vector",
+      tiles: [`${TILESERV_URL}/public.accurate_observations/{z}/{x}/{y}.pbf`]
+    });
+    map.addLayer({
+      id: "accurate_observations-circle",
+      type: "circle",
+      source: "accurate_observations",
+      "source-layer": "public.accurate_observations",
+      paint: {
+        "circle-radius": 5,
+        "circle-color": "#f59e0b",
+        "circle-stroke-width": 1.2,
+        "circle-stroke-color": "#ffffff"
+      }
+    });
+
+    // Click Popups for Interactive Inspection
+    const clickableLayers = [
+      {
+        id: "search_area_parking_pins-circle",
+        title: (p) => `🚗 Search Area Parking Pin (Tile #${p.tile_id})`,
+        html: (p, lngLat) => `
+          <b>Road:</b> ${p.nearest_road} (${p.road_class})<br/>
+          <b>Hike to Area Center:</b> ${p.hike_from_road_m} m<br/>
+          <b>Target Forest:</b> ${p.agency} • ${p.dominant_trees} (${p.canopy_pct}% canopy, ${p.elev_m}m)<br/>
+          <b>Nearest Trailhead:</b> ${p.nearest_trailhead}<br/>
+          <a href="https://www.google.com/maps?q=${lngLat.lat.toFixed(5)},${lngLat.lng.toFixed(5)}" target="_blank">Open Parking Pin in Google Maps ↗</a>
+        `
+      },
+      {
+        id: "recommended_search_areas-fill",
+        title: (p) => `🎯 Recommended Search Area (Tile #${p.tile_id})`,
+        html: (p) => `
+          <b>Public Land:</b> ${p.agency} — ${p.forest_unit}<br/>
+          <b>Dominant Trees:</b> ${p.dominant_trees}<br/>
+          <b>Canopy Cover:</b> ${p.canopy_pct}%<br/>
+          <b>Terrain:</b> ${p.elev_m}m elev • ${p.slope_deg}° slope • ${p.aspect_deg}° aspect<br/>
+          <b>Nearest Road:</b> ${p.nearest_road} (${p.hike_from_road_m}m hike)<br/>
+          <b>Parking Pin GPS:</b> <a href="https://www.google.com/maps?q=${p.road_entry_lat},${p.road_entry_lon}" target="_blank">${p.road_entry_lat}, ${p.road_entry_lon} ↗</a>
+        `
+      },
+      {
+        id: "accurate_observations-circle",
+        title: (p) => `🍄 ${p.common_name || p.species_name}`,
+        html: (p) => `
+          <b>Species:</b> <i>${p.species_name}</i><br/>
+          <b>Observed:</b> ${p.observed_date || "N/A"}<br/>
+          <b>Terrain:</b> ${p.elevation_m}m • ${p.slope_deg}° slope • ${p.aspect_cardinal} aspect<br/>
+          <b>Forest:</b> ${p.tree_group} (${p.canopy_pct}% canopy)<br/>
+          ${p.inaturalist_url ? `<a href="${p.inaturalist_url}" target="_blank">View on iNaturalist ↗</a>` : ""}
+        `
+      },
+      {
+        id: "trailheads-circle",
+        title: (p) => `🥾 ${p.site_name}`,
+        html: (p) => `
+          <b>Type:</b> ${p.site_type} (${p.status})<br/>
+          <b>Forest:</b> ${p.forest_name}<br/>
+          <b>Activities:</b> ${p.activities || "N/A"}
+        `
+      },
+      {
+        id: "forest_roads-line",
+        title: (p) => `🛣️ ${p.road_name}`,
+        html: (p) => `
+          <b>Class:</b> ${p.road_class}<br/>
+          <b>Agency:</b> ${p.agency} (${p.source})<br/>
+          <b>Access:</b> ${p.vehicle_access}
+        `
+      }
+    ];
+
+    clickableLayers.forEach((layer) => {
+      map.on("click", layer.id, (e) => {
+        const props = e.features[0].properties;
+        new maplibregl.Popup()
+          .setLngLat(e.lngLat)
+          .setHTML(`<div class="popup-title">${layer.title(props)}</div>${layer.html(props, e.lngLat)}`)
+          .addTo(map);
+      });
+      map.on("mouseenter", layer.id, () => { map.getCanvas().style.cursor = "pointer"; });
+      map.on("mouseleave", layer.id, () => { map.getCanvas().style.cursor = ""; });
+    });
+  });
+
+  // Layer Visibility Checkboxes
+  const layerGroups = {
+    recommended_search_areas: ["recommended_search_areas-fill", "recommended_search_areas-outline"],
+    search_area_parking_pins: ["search_area_parking_pins-circle"],
+    accurate_observations: ["accurate_observations-circle"],
+    trailheads: ["trailheads-circle"],
+    forest_roads: ["forest_roads-line"],
+    land_ownership: ["land_ownership-fill", "land_ownership-outline"]
+  };
+
+  document.querySelectorAll("input[data-layer]").forEach((checkbox) => {
+    checkbox.addEventListener("change", (e) => {
+      const group = layerGroups[e.target.dataset.layer];
+      const visibility = e.target.checked ? "visible" : "none";
+      group.forEach((layerId) => {
+        if (map.getLayer(layerId)) {
+          map.setLayoutProperty(layerId, "visibility", visibility);
+        }
+      });
+    });
+  });
+
+  // Basemap Switcher
+  document.getElementById("basemap-select").addEventListener("change", (e) => {
+    const val = e.target.value;
+    map.setLayoutProperty("usgs-topo-layer", "visibility", val === "usgs-topo" ? "visible" : "none");
+    map.setLayoutProperty("usgs-imagery-layer", "visibility", val === "usgs-imagery" ? "visible" : "none");
+    map.setLayoutProperty("street-layer", "visibility", val === "street" ? "visible" : "none");
+  });
+</script>
+
+</body>
+</html>
